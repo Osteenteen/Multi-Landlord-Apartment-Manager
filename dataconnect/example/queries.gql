@@ -1,0 +1,18 @@
+query ListPlaceholders @auth(level: PUBLIC) {
+  placeholders {
+    id
+    status
+  }
+}
+
+mutation InsertPlaceholder($status: String) @auth(level: PUBLIC) {
+  placeholder_insert(data: { status: $status })
+}
+
+mutation UpdatePlaceholder($id: UUID!, $status: String) @auth(level: PUBLIC) {
+  placeholder_update(id: $id, data: { status: $status })
+}
+
+mutation DeletePlaceholder($id: UUID!) @auth(level: PUBLIC) {
+  placeholder_delete(id: $id)
+}
