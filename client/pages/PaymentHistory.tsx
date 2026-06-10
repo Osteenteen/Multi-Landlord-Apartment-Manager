@@ -261,29 +261,27 @@ export default function PaymentHistory() {
       user={session}
       title={isLandlord ? "Master Property Payments Ledger" : "My Rent Statements"}
       headerRight={
-        <div className="flex items-center gap-4">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
           <button
             onClick={() => navigate("/dashboard")}
-            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors"
+            className="flex items-center gap-2 px-3 py-1.5 text-sm font-medium text-gray-700 border border-gray-300 rounded-md hover:bg-gray-50 transition-colors w-full sm:w-auto"
           >
             <ArrowLeft size={16} />
             <span>Back</span>
           </button>
           {isLandlord && (
             <>
-              <div className="bg-green-900 text-white px-4 py-3 rounded-lg shadow-sm flex items-center gap-6 text-sm text-right">
-                <div>
-                  <p className="text-green-200 text-[10px] font-bold uppercase tracking-wider">
-                    Total Revenue Collected
-                  </p>
-                  <p className="text-xl font-black tracking-tight mt-0.5">
-                    KES {totalCollectedSum.toLocaleString()}
-                  </p>
-                </div>
+              <div className="bg-green-900 text-white px-4 py-2 sm:py-3 rounded-lg shadow-sm flex flex-col sm:flex-row items-start sm:items-center gap-2 text-sm text-left sm:text-right w-full sm:w-auto">
+                <p className="text-green-200 text-[10px] font-bold uppercase tracking-wider">
+                  Total Revenue Collected
+                </p>
+                <p className="text-xl font-black tracking-tight">
+                  KES {totalCollectedSum.toLocaleString()}
+                </p>
               </div>
               <button
                 onClick={() => setShowCashModal(true)}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-white bg-emerald-600 rounded-md hover:bg-emerald-700 transition-colors w-full sm:w-auto"
               >
                 <Plus size={16} />
                 <span>Record Cash Payment</span>

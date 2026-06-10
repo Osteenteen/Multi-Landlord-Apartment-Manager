@@ -35,17 +35,17 @@ export default function PageLayout({
 
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Header */}
-        <header className="bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between sticky top-0 z-20">
-          <div className="pl-16 lg:pl-0">
+        <header className="bg-white border-b border-gray-200 px-4 sm:px-6 py-3 sm:py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between sticky top-0 z-20 gap-3">
+          <div className="pl-16 lg:pl-0 w-full sm:w-auto">
             {title && (
-              <h1 className="text-lg lg:text-xl font-bold text-gray-900">{title}</h1>
+              <h1 className="text-lg font-bold text-gray-900">{title}</h1>
             )}
             {subtitle && (
               <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>
             )}
           </div>
 
-          <div className="flex items-center gap-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full sm:w-auto">
             <div className="flex items-center gap-3">
               <div className={cn("w-9 h-9 rounded-full flex items-center justify-center text-white font-bold text-sm uppercase", isTenant ? "bg-purple-600" : "bg-green-600")}>
                 {user.phone.charAt(user.phone.length - 1)}
@@ -55,12 +55,14 @@ export default function PageLayout({
                 <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider">{user.role}</p>
               </div>
             </div>
-            {headerRight}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+              {headerRight}
+            </div>
           </div>
         </header>
 
         {/* Content */}
-        <main className="flex-1 overflow-y-auto p-6">
+        <main className="flex-1 overflow-y-auto p-4 sm:p-6">
           <div className="max-w-7xl mx-auto space-y-6">
             {children}
           </div>
