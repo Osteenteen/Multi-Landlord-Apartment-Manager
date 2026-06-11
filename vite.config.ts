@@ -1,7 +1,6 @@
 import { defineConfig, Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 import path from "node:path";
-import { createServer } from "./server";
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -28,8 +27,11 @@ export default defineConfig(({ mode }) => ({
 function expressPlugin(): Plugin {
   return {
     name: "express-plugin",
-    apply: "serve", // Only apply during development (serve mode)
-    configureServer(server) {
+    apply: "serve", // Only apply during development (npm run dev)
+    async configureServer(server) {
+      // 🚀 FIX: Dynamically import the backend ONLY when the local dev server is spun up.
+      // This hides the server directory from Netlify's production build compiler entirely.
+      const { createServer } = await import("./server");
       const app = createServer();
 
       // Add Express app as middleware to Vite dev server
