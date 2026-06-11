@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { db } from "../firebase";
-import { doc, getDoc, updateDoc, addDoc, collection } from "firebase/firestore";
+import { doc, getDoc, onSnapshot } from "firebase/firestore"; 
 import { 
   ArrowLeft, 
   Smartphone, 
@@ -119,7 +119,7 @@ export default function PayRent() {
     };
 
     loadCompleteInvoiceAndLandlordData();
-  }, [navigate]);
+  }, [navigate, houseNumber]);
 
   const formatMpesaLine = (input: string) => {
     let clean = input.replace(/\D/g, "");
@@ -151,71 +151,78 @@ export default function PayRent() {
     }
 
     setProcessingPayment(true);
-    setStatusMsg(`Sending STK Push Request linked to your landlord's gateway... Please enter your M-Pesa PIN on your phone handset.`);
+    setStatusType(""); 
+    setStatusMsg("Sending STK Push Request linked to your landlord's gateway...");
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 4000));
-
       if (!session) return;
 
-      const newBalance = currentBalance - parsedAmount;
+      // Match this to whatever port your backend server runs on (8080 or 5000)
+      const BACKEND_BASE_URL = "http://localhost:8080"; 
 
-      const tenantDocRef = doc(db, "users", session.uid);
-      await updateDoc(tenantDocRef, {
-        balance: newBalance >= 0 ? newBalance : 0,
+      const response = await fetch(`${BACKEND_BASE_URL}/api/mpesa/stkpush`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone: cleanLine, 
+          amount: parsedAmount,
+          houseNumber: houseNumber || "RentPayment",
+          tenantId: session.uid,
+          apartmentId: session.apartmentId
+        }),
       });
 
-      await addDoc(collection(db, "payments"), {
-        tenantId: session.uid,
-        associatedApartmentId: session.apartmentId,
-        tenantName: tenantName,
-        houseNumber: houseNumber,
-        amountPaid: parsedAmount,
-        mpesaLine: "+" + cleanLine,
-        timestamp: new Date().toISOString(),
-        status: "Completed",
-        recipientBusinessName: landlordBusinessName,
-        destinationPaybill: landlordPaybill,
-        mpesaReceiptNumber: "B" + Math.random().toString(36).substring(2, 11).toUpperCase(),
-        paymentType: "mpesa"
-      });
+      const backendResult = await response.json();
 
-      // Send notification to tenant
-      await addDoc(collection(db, "notifications"), {
-        recipientId: session.uid,
-        title: "Payment Received",
-        message: `Your payment of KSh ${parsedAmount.toLocaleString()} has been processed successfully! Your new balance is KSh ${Math.max(0, newBalance).toLocaleString()}.`,
-        type: "payment",
-        read: false,
-        timestamp: new Date().toISOString()
-      });
-
-      // Send notification to landlord
-      if (landlordUid) {
-        await addDoc(collection(db, "notifications"), {
-          recipientId: landlordUid,
-          title: "New Payment Received",
-          message: `${tenantName} (Unit ${houseNumber}) has made a payment of KSh ${parsedAmount.toLocaleString()}.`,
-          type: "payment",
-          read: false,
-          timestamp: new Date().toISOString()
-        });
+      if (!response.ok || !backendResult.success) {
+        throw new Error(backendResult.error || "Safaricom gateway infrastructure rejected the execution sequence.");
       }
 
-      setCurrentBalance(newBalance >= 0 ? newBalance : 0);
-      setStatusType("success");
-      setStatusMsg(
-        `Success! Payment of KSh ${parsedAmount.toLocaleString()} processed successfully to ${landlordBusinessName}. Your updated balance is KSh ${Math.max(
-          0,
-          newBalance
-        ).toLocaleString()}.`
-      );
-      setPaymentAmount("");
-    } catch (err) {
-      console.error("Transaction processing ledger fault:", err);
+      const darajaMeta = backendResult.data;
+      if (darajaMeta.ResponseCode !== "0") {
+        throw new Error(darajaMeta.ResponseDescription || "M-Pesa execution context broken by core routing rules.");
+      }
+
+      const { CheckoutRequestID } = darajaMeta;
+
+      setStatusType("");
+      setStatusMsg(`⚡ STK Prompt Sent! Please verify line +${cleanLine}, enter your secret M-Pesa PIN on your phone handset, and keep this tracking window open...`);
+
+      // 📡 REAL-TIME SUBSCRIPTION MODULE: Tracking server adjustments safely
+      const trackingDocRef = doc(db, "mpesa_tracking", CheckoutRequestID);
+
+      const unsubscribe = onSnapshot(trackingDocRef, (snapshot) => {
+        if (!snapshot.exists()) return;
+
+        const trackingData = snapshot.data();
+
+        // 🟢 STATE A: Server processed webhook and mutated backend nodes successfully
+        if (trackingData.status === "Completed") {
+          unsubscribe(); 
+          
+          const newBalance = currentBalance - parsedAmount;
+          setCurrentBalance(newBalance >= 0 ? newBalance : 0);
+          setPaymentAmount("");
+          setStatusType("success");
+          setStatusMsg(`🎉 Payment Cleared Successfully! KSh ${parsedAmount.toLocaleString()} received via Receipt: ${trackingData.mpesaReceipt}. Thank you!`);
+          setProcessingPayment(false);
+        }
+
+        // 🔴 STATE B: User aborted push, typed incorrect PIN, or handshake expired
+        if (trackingData.status === "Failed") {
+          unsubscribe(); 
+          setStatusType("error");
+          setStatusMsg(`❌ Transaction Declined: ${trackingData.reason || "The verification request context timed out or was manually cancelled."}`);
+          setProcessingPayment(false);
+        }
+      });
+
+    } catch (err: any) {
+      console.error("❌ Transaction processing ledger fault:", err);
       setStatusType("error");
-      setStatusMsg("Payment communication failure. Please verify network cloud rules configurations.");
-    } finally {
+      setStatusMsg(err.message || "Payment communication failure. Please verify network cloud rules configurations.");
       setProcessingPayment(false);
     }
   };
@@ -247,10 +254,8 @@ export default function PayRent() {
       <div className="w-full max-w-5xl mx-auto p-4 sm:p-6 text-left">
         <div className="grid grid-cols-1 lg:grid-cols-2 bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden divide-y lg:divide-y-0 lg:divide-x divide-gray-200">
           
-          {/* Left Column: Ledger Records and Alternative Flows */}
+          {/* Left Column: Ledger Records */}
           <div className="p-6 space-y-6 bg-gray-50/30">
-            
-            {/* Account Meta Badge Block */}
             <div className="p-4 bg-white border border-gray-200 rounded-xl flex items-center justify-between shadow-sm">
               <div>
                 <span className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Tenant Profiling</span>
@@ -263,7 +268,6 @@ export default function PayRent() {
               </div>
             </div>
 
-            {/* Landlord Billing Description Breakdown */}
             <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
               <header className="bg-gray-50 px-4 py-2.5 text-xs font-bold text-gray-700 flex items-center gap-1.5 border-b border-gray-200 uppercase tracking-wider">
                 <Receipt size={14} className="text-purple-600" />
@@ -297,13 +301,11 @@ export default function PayRent() {
               </div>
             </div>
 
-            {/* Dynamic Manual Option B Checklist Container */}
             <div className="p-5 border border-blue-100 bg-blue-50/30 rounded-xl space-y-3 shadow-inner">
               <div className="flex items-center gap-2 font-black text-blue-950 uppercase tracking-wider text-[10px]">
                 <Info size={14} className="text-blue-600" />
                 <span>Option B: Manual Payment Instructions</span>
               </div>
-              
               <div className="text-xs text-blue-900 leading-relaxed font-medium space-y-2">
                 <p>If the STK push fails, open your Sim ToolKit or M-Pesa Application and execute manually:</p>
                 
@@ -339,7 +341,7 @@ export default function PayRent() {
             </div>
           </div>
 
-          {/* Right Column: Automated Express Form Matrix Panel */}
+          {/* Right Column: Automated Form Panel */}
           <div className="p-6 bg-white flex flex-col justify-between">
             <form onSubmit={handleMpesaPay} className="space-y-5">
               <div className="space-y-1">
@@ -352,7 +354,6 @@ export default function PayRent() {
                 </p>
               </div>
 
-              {/* Response Alert Banners */}
               {statusMsg && (
                 <div className={cn(
                   "p-3.5 text-xs font-semibold border rounded-lg flex items-start gap-2.5 leading-relaxed text-left animate-in fade-in duration-150 shadow-sm",
@@ -412,7 +413,7 @@ export default function PayRent() {
                 {processingPayment ? (
                   <>
                     <Loader2 size={14} className="animate-spin" />
-                    <span>Processing Express Hook...</span>
+                    <span>Awaiting PIN Entry...</span>
                   </>
                 ) : (
                   <>
@@ -429,4 +430,3 @@ export default function PayRent() {
     </PageLayout>
   );
 }
-
